@@ -1,0 +1,28 @@
+{
+  "buildOnSave": false,
+  "compileOnSave": false,
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "es2020",
+    "lib": [
+      "es2020",
+      "dom"
+    ],
+    "noImplicitAny": true,
+    "removeComments": true,
+    "strictNullChecks": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    "preserveConstEnums": true,
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "outDir": "dist",
+    "noImplicitReturns": true
+  },
+  "typeRoots": [
+    "node_modules/@types"
+  ],
+  "include": [
+    "src"
+  ]
+}

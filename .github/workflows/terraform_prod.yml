@@ -1,0 +1,99 @@
+# .github/workflows/terraform_prod.yml
+name: Terraform Prod in GCloud
+on:
+  release:
+    types:
+      - created
+env:
+  ENV: prod
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v0
+        with:
+          version: '410.0.0'
+          service_account_key: ${{ secrets.GCP_SA_KEY_JSON }}
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          export_default_credentials: true
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+      - name: Terraform init
+        working-directory: terraform
+        run: |-
+          terraform version
+          terraform init -backend-config="bucket=${{ vars.GCP_PROJECT_ID }}-tfstate"
+      - name: Terraform Plan
+        working-directory: terraform
+        env:
+          TF_VAR_api_key: ${{ secrets.API_KEY }}
+          TF_VAR_cloud_run_service_name: ${{ vars.CLOUD_RUN_SERVICE_NAME }}
+          TF_VAR_db_cpu: 4
+          TF_VAR_db_disk: 100
+          TF_VAR_db_memory: 3840
+          TF_VAR_db_ro_password: ${{ secrets.DB_RO_PASSWORD }}
+          TF_VAR_docker_tag: ${{ github.sha }}
+          TF_VAR_dropshipping_contract_api_key: ${{ secrets.DROPSHIPPING_CONTRACT_API_KEY }}
+          TF_VAR_environment_name: ${{ env.ENV }}
+          TF_VAR_euronet_db_host: ${{ vars.EURONET_DB_HOST }}
+          TF_VAR_euronet_db_name: ${{ vars.EURONET_DB_NAME }}
+          TF_VAR_euronet_db_password: ${{ secrets.EURONET_DB_PASSWORD }}
+          TF_VAR_euronet_db_user: ${{ vars.EURONET_DB_USER }}
+          TF_VAR_jwt_secret_for_services: ${{ secrets.JWT_SECRET_FOR_SERVICES }}
+          TF_VAR_oauth_password: ${{ secrets.OAUTH_PASSWORD }}
+          TF_VAR_oauth_username: ${{ secrets.OAUTH_USERNAME }}
+          TF_VAR_om_stock_endpoint: ${{ vars.OM_STOCK_ENDPOINT }}
+          TF_VAR_pim_pword: ${{ secrets.PIM_PWORD }}
+          TF_VAR_pim_user: ${{ vars.PIM_USER }}
+          TF_VAR_pim_webservice_host: ${{ vars.PIM_WEBSERVICE_HOST }}
+          TF_VAR_project: ${{ vars.GCP_PROJECT_ID }}
+          TF_VAR_run_api_url: ${{ vars.run_proxy_url }}
+          TF_VAR_sa_ds_dashboard: ${{ vars.SA_DS_DASHBOARD }}
+          TF_VAR_service_acc_appspot: ${{ vars.SA_APPSPOT }}
+          TF_VAR_service_acc_compute_developer: ${{ vars.SA_COMPUTE_DEVELOPER }}
+          TF_VAR_service_acc_marketplace_compute: ${{ vars.SA_MARKETPLACE_COMPUTE }}
+          TF_VAR_service_acc_storage: ${{ vars.SA_STORAGE }}
+          TF_VAR_teams_notification_token: ${{ secrets.TEAMS_NOTIFICATION_TOKEN }}
+          #TF_VAR_service_acc_marketplace_advert_run: ${{ vars.SA_MARKETPLACE_ADVERT_RUN }} # Enable this when marketplace account exists in prod
+          #TF_VAR_service_acc_marketplace_webhook_event_run: ${{ vars.SA_MARKETPLACE_WEBHOOK_EVENT_RUN }} # Enable this when marketplace account exists in prod
+        run: terraform plan
+      - name: Terraform Apply
+        working-directory: terraform
+        env:
+          TF_VAR_api_key: ${{ secrets.API_KEY }}
+          TF_VAR_cloud_run_service_name: ${{ vars.CLOUD_RUN_SERVICE_NAME }}
+          TF_VAR_db_cpu: 4
+          TF_VAR_db_disk: 100
+          TF_VAR_db_memory: 3840
+          TF_VAR_db_ro_password: ${{ secrets.DB_RO_PASSWORD }}
+          TF_VAR_docker_tag: ${{ github.sha }}
+          TF_VAR_dropshipping_contract_api_key: ${{ secrets.DROPSHIPPING_CONTRACT_API_KEY }}
+          TF_VAR_environment_name: ${{ env.ENV }}
+          TF_VAR_euronet_db_host: ${{ vars.EURONET_DB_HOST }}
+          TF_VAR_euronet_db_name: ${{ vars.EURONET_DB_NAME }}
+          TF_VAR_euronet_db_password: ${{ secrets.EURONET_DB_PASSWORD }}
+          TF_VAR_euronet_db_user: ${{ vars.EURONET_DB_USER }}
+          TF_VAR_jwt_secret_for_services: ${{ secrets.JWT_SECRET_FOR_SERVICES }}
+          TF_VAR_oauth_password: ${{ secrets.OAUTH_PASSWORD }}
+          TF_VAR_oauth_username: ${{ secrets.OAUTH_USERNAME }}
+          TF_VAR_om_stock_endpoint: ${{ vars.OM_STOCK_ENDPOINT }}
+          TF_VAR_pim_pword: ${{ secrets.PIM_PWORD }}
+          TF_VAR_pim_user: ${{ vars.PIM_USER }}
+          TF_VAR_pim_webservice_host: ${{ vars.PIM_WEBSERVICE_HOST }}
+          TF_VAR_project: ${{ vars.GCP_PROJECT_ID }}
+          TF_VAR_run_api_url: ${{ vars.run_proxy_url }}
+          TF_VAR_sa_ds_dashboard: ${{ vars.SA_DS_DASHBOARD }}
+          TF_VAR_service_acc_appspot: ${{ vars.SA_APPSPOT }}
+          TF_VAR_service_acc_compute_developer: ${{ vars.SA_COMPUTE_DEVELOPER }}
+          TF_VAR_service_acc_marketplace_compute: ${{ vars.SA_MARKETPLACE_COMPUTE }}
+          TF_VAR_service_acc_storage: ${{ vars.SA_STORAGE }}
+          TF_VAR_teams_notification_token: ${{ secrets.TEAMS_NOTIFICATION_TOKEN }}
+          #TF_VAR_service_acc_marketplace_advert_run: ${{ vars.SA_MARKETPLACE_ADVERT_RUN }} # Enable this when marketplace account exists in prod
+          #TF_VAR_service_acc_marketplace_webhook_event_run: ${{ vars.SA_MARKETPLACE_WEBHOOK_EVENT_RUN }} # Enable this when marketplace account exists in prod
+        run: terraform apply -auto-approve

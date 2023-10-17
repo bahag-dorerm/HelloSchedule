@@ -1,0 +1,92 @@
+name: Deploy Sftp Collector Function to PROD
+on:
+  release:
+    types:
+      - created
+
+env:
+  VPC_CONNECTOR: projects/${{ vars.GCP_PROJECT_ID }}/locations/europe-west1/connectors/serverless-vpc-connector
+  ENV: prod
+  SECRET_PATH_PREFIX: projects/${{ vars.GCP_PROJECT_ID }}/secrets
+  SECRET_PATH_POSTFIX: versions/latest
+  MAIL_SENDER_TOPIC: ${{ vars.MAIL_SENDER_TOPIC }}
+  GENERAL_PROJECT_ID: ${{ vars.GCP_PROJECT_ID_GENERAL }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: prod
+    defaults:
+      run:
+        working-directory: sftp-collector
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          registry-url: 'https://npm.pkg.github.com'
+          always-auth: true
+          scope: '@bahag'
+      - name: Setup Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v0
+        with:
+          version: '410.0.0'
+          service_account_key: ${{ secrets.GCP_SA_KEY_JSON }}
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          export_default_credentials: true
+      - name: NPM Install
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GH_PACKAGE_READ }}
+      - name: Lint
+        run: npm run lint
+      - name: Tests
+        run: npm run test
+      - run: echo '//npm.pkg.github.com/:_authToken=${{ secrets.GH_PACKAGE_READ }}' >> .npmrc
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GH_PACKAGE_READ }}
+      - name: Build and Package
+        run: npm run build-action
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GH_PACKAGE_READ }}
+      - name: Get secrets
+        id: 'secrets'
+        uses: 'google-github-actions/get-secretmanager-secrets@v1'
+        with:
+          secrets: |-
+            trigger_topic:${{ vars.GCP_PROJECT_ID }}/SFTP_COLLECTOR_TOPIC_NAME
+      - name: Deploy
+        uses: 'google-github-actions/deploy-cloud-functions@v1'
+        with:
+          name: sftp-collector
+          runtime: nodejs20
+          entry_point: collectFromSftp
+          source_dir: ./sftp-collector/dist
+          memory_mb: 256
+          region: europe-west1
+          event_trigger_type: google.pubsub.topic.publish
+          event_trigger_resource: projects/${{ vars.GCP_PROJECT_ID }}/topics/${{ steps.secrets.outputs.trigger_topic }}
+          env_vars:
+            project_id=${{ vars.GCP_PROJECT_ID }},
+            environment=${{ env.ENV }},
+            GCP_PROJECT_ID_GENERAL=${{ vars.GCP_PROJECT_ID_GENERAL }},
+            PUB_SUB_TOPIC_NAME_TEAMS=${{ vars.PUB_SUB_TOPIC_NAME_TEAMS }},
+            OAUTH_URL=${{ vars.OAUTH_URL }},
+            SUPPLIER_MASTERDATA_SERVICE_URL=${{ vars.SUPPLIER_MASTERDATA_SERVICE_URL }},
+            OAUTH_USERNAME=${{ secrets.OAUTH_USERNAME }},
+            ORDERSTATUS_PROJECT_ID=${{ vars.ORDERSTATUS_PROJECT_ID }},
+            MAIL_SENDER_TOPIC=${{ env.MAIL_SENDER_TOPIC }},
+            GENERAL_PROJECT_ID=${{ env.GENERAL_PROJECT_ID }}
+          secret_environment_variables:
+            API_DB_USER=${{ env.SECRET_PATH_PREFIX }}/API_DB_USER/${{ env.SECRET_PATH_POSTFIX }},
+            DB_PRIVATE_IP=${{ env.SECRET_PATH_PREFIX }}/DB_PRIVATE_IP/${{ env.SECRET_PATH_POSTFIX }},
+            API_DB_PASSWORD=${{ env.SECRET_PATH_PREFIX }}/API_DB_PASSWORD/${{ env.SECRET_PATH_POSTFIX }},
+            API_DB_NAME=${{ env.SECRET_PATH_PREFIX }}/API_DB_NAME/${{ env.SECRET_PATH_POSTFIX }},
+            INBOUND_XLSX_BUCKET_NAME=${{ env.SECRET_PATH_PREFIX }}/INBOUND_XLSX_BUCKET_NAME/${{ env.SECRET_PATH_POSTFIX }},
+            INBOUND_CSV_BUCKET_NAME=${{ env.SECRET_PATH_PREFIX }}/INBOUND_CSV_BUCKET_NAME/${{ env.SECRET_PATH_POSTFIX }},
+            SFTP_PASSWORD=${{ env.SECRET_PATH_PREFIX }}/SFTP_PASSWORD/${{ env.SECRET_PATH_POSTFIX }},
+            SFTP_USER_NAME=${{ env.SECRET_PATH_PREFIX }}/SFTP_USER_NAME/${{ env.SECRET_PATH_POSTFIX }},
+            OAUTH_PASSWORD=${{ env.SECRET_PATH_PREFIX }}/OAUTH_PASSWORD/${{ env.SECRET_PATH_POSTFIX }}
+          timeout: 300
+          vpc_connector_egress_settings: ALL_TRAFFIC
+          vpc_connector: ${{ env.VPC_CONNECTOR }}
